@@ -3,82 +3,125 @@ const express=require('express');
 const student=require('../models/student');
 const user=require('../models/user')
 const nodemailer = require("nodemailer");
-
+const { db } = require('../models/student');
 
 const router=express.Router();
 router.get('/',(req,res)=>{
     res.send("signup");
 })
 
-router.post('/signup',(req,res)=>{
+router.post('/',(req,res)=>{
+
+  //generating unique user ID
+    const studentCode="STD";
+    let Idpresent=0;
+    let studentId="";
+   do{
+      let studentNumber=Math.floor(Math.random()*1000000);
+      studentId=studentCode+studentNumber;
+      db.collection('students').find({id:studentId}).toArray((err, result) => {
+        if (err) throw err
+        Idpresent=result.length;
+      });
+    }while(Idpresent>0);
+  //-----------------------------
+
    const studentData=new student({
-    fullName:req.body.fullName,
+    id:studentId,
+    name:req.body.name,
     email:req.body.email,
-    phone:req.body.phone,
-    dob:req.body.dob,
-    password:req.body.password,
-    verified:false
+    password:req.body.password
    })
 
-
+   const vcode=Math.floor(Math.random()*1000000);
    const userData=new user({
     id:req.body.email,
     password:req.body.password,
-    type:"student"
+    type:"student",
+    vcode:vcode,
+    verified:false,
+    onboarded:false
    })
 
-   console.log(studentData);
-   let randNum=Math.floor(Math.random()*1000000);
-   const OTP=randNum;
+   //generating verification code
+ 
    
-   
-   // async..await is not allowed in global scope, must use a wrapper
    async function main() {
-     // Generate test SMTP service account from ethereal.email
-     // Only needed if you don't have a real mail account for testing
      let testAccount = await nodemailer.createTestAccount();
-   
-     // create reusable transporter object using the default SMTP transport
      let transporter = nodemailer.createTransport({
        host: "smtp.gmail.com",
        port: 587,
-       secure: false, // true for 465, false for other ports
+       secure: false,
        auth: {
-         user: 'yukthink@gmail.com', // generated ethereal user
-         pass: 'wwnsxsqhcapvmrye', // generated ethereal password
+         user: 'yukthink@gmail.com', 
+         pass: 'ipxmgzisapkkvlcl'
        },
      });
    
-     // send mail with defined transport object
      let info = await transporter.sendMail({
-       from: '"akhil@edbroader 👻" <yukthink@gmail.com>', // sender address
-       to: "akhilkthomas99@gmail.com", // list of receivers
-       subject: "Hello from Edbroader", // Subject line
-       text: "This is email body text.", // plain text body
-       html: "<div><b>Hello User!</b><p>Your OTP is "+ OTP +" </p></div>", // html body
-     });
-   
-     console.log("Message sent: %s", info.messageId);
-     // Message sent: <b658f8ca-6296-ccf4-8306-87d57a0b4321@example.com>
-   
-     // Preview only available when sending through an Ethereal account
-     console.log("Preview URL: %s", nodemailer.getTestMessageUrl(info));
-     // Preview URL: https://ethereal.email/message/WaQKMgKddxQDoou...
-   }
+      from: '"akhil@edbroader 👻" <yukthink@gmail.com>',
+      to: req.body.email, 
+      subject: "Hello from Edbroader",
+      text: "This is email body text.",
+      html: "<div><b>Hello User!</b><p>Your OTP is "+ vcode +" </p></div>" // html body
+    });
+    console.log("Message sent: %s", info.messageId);
+    console.log("Preview URL: %s", nodemailer.getTestMessageUrl(info));
+  }
+  main().catch(console.error);
 
-   main().catch(console.error);
-   console.log(studentData);
-   studentData.save((err,data)=>{
-    if(err){
-        console.log(err);
+
+
+
+   db.collection('users').find({id:req.body.email}).toArray((err, result) => {
+    if (err) throw err
+    console.log(vcode);
+    console.log(result);
+
+    if(result.length>0){
+      res.status(400).send({message:"Email already registered"});
     }else{
-        res.status(200).send(data);
+      userData.save((err,data)=>{
+        if(err){
+          console.log("Failed to save user credentials",err);
+        }else{
+          console.log("User credentials saved successfully :",data);
+        }
+      });
+      studentData.save((err,data)=>{
+        if(err){
+            res.status(400).send({status:"failed",message:"failed to save student data!"})
+            console.log("Failed to save user data",err);
+        }else{
+            res.status(200).send({status:"success",message:"student data saved successfully :",data});
+            console.log("Student data saved successfully :",data);
+        }
+      })
     }
-   })
-   userData.save();
-
+  });  
 })
 
+router.get('/verify',(req,res)=>{
+ res.send("verify");
+})
 
+router.post('/verify',(req,res)=>{
+  console.log("We are at verify POST route");
+  const vcode = req.body.vcode;
+  const vcodeInt= parseInt(vcode);
+  db.collection('users').find({id:req.body.id,vcode:vcodeInt}).toArray((err, result) => {
+    if (err) throw err
+    console.log(result);
+    console.log(req.body.id,req.body.vcode);
+    if(result.length>0){
+      db.collection('users').updateOne({id:req.body.id},{$set:{verified:true}});
+      res.status(200).send({status:"verified",message:"Email verified successfully."});
+      console.log("CODE VERIFIED");
+    }else{
+      res.status(400).send({status:"invalid",message:"Invalid code."});
+      console.log("INVALID CODE");
+    }
+  });
+})
 
 module.exports=router;

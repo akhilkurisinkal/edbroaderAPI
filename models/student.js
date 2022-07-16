@@ -1,10 +1,8 @@
 const mongoose=require('mongoose');
 const studentSchema=mongoose.Schema({
-    fullName:String,
+    id:String,
+    name:String,
     email:String,
-    phone:Number,
-    dob:String,
-    password:String,
-    verified:Boolean
+    password:String
 })
 module.exports=mongoose.model('student',studentSchema);
